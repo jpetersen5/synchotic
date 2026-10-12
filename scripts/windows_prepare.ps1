@@ -10,6 +10,9 @@ Push-Location src
 & ..\venv\Scripts\python -m pip install -q -r requirements.txt
 if ($LASTEXITCODE) { throw "pip install failed" }
 Pop-Location
+# A pseudo-console and a terminal emulator, for scenarios.py
+& venv\Scripts\python -m pip install -q pywinpty pyte
+if ($LASTEXITCODE) { throw "pip install failed" }
 
 # UnRAR.exe, as .github/actions/setup-unrar fetches it for Windows
 if (-not (Test-Path unrar_cli\UnRAR.exe)) {

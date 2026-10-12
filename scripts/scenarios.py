@@ -1,4 +1,5 @@
-"""Scripted runs of the real app, start to finish, in a tmux pane.
+"""Scripted runs of the real app, start to finish, in a tmux pane (on Windows,
+a ConPTY: scripts/run_windows_scenarios.sh runs them on a Windows host).
 
 A scenario (scenarios/*.scn) is a list of steps: set up a throwaway install,
 launch the app, press keys, wait for what the screen should say, and check the
@@ -25,7 +26,11 @@ Steps, one per line, # for comments:
     wait "text" [secs]            until the screen shows text (default 60)
     gone "text" [secs]            until it no longer does
     expect "text" / refute "text" the screen shows it now / does not
-    press KEY ...                 S, y, n, Enter, Escape, Up, Down, Tab, Space
+    press KEY ...                 S, y, n, Enter, Escape, Up, Down, Left, Right,
+                                  Home, End, Tab, Space, Backspace, Delete
+    resize 80x24                  the window's new size, as dragging it would
+    tidy                          the screen is one whole frame, or one cut short
+                                  by a small window: never stacked or scrolled
     type "text"                   literal text; $CUSTOM is a small chart folder
                                   a custom drive can be made from
     select "text"                 move the focused pane's cursor onto a row
@@ -53,9 +58,12 @@ RUNS = REPO / "runs"
 SOCKET = "synchotic-scenarios"
 COLS, ROWS = 100, 34
 CURSOR_BG = "48;2;55;62;82"  # chotic-ui Colors.HIGHLIGHT_BG, the focused row
+CURSOR_HEX = "373e52"  # the same colour as pyte reports it
 PROMPTS = ("Sync anyway?", "Delete ")  # questions a sync can stop on
 KEYS = {"enter": "Enter", "escape": "Escape", "esc": "Escape", "up": "Up",
-        "down": "Down", "tab": "Tab", "space": "Space"}
+        "down": "Down", "tab": "Tab", "space": "Space", "backspace": "BSpace",
+        "left": "Left", "right": "Right", "home": "Home", "end": "End",
+        "delete": "DC"}
 
 
 class Failed(Exception):
@@ -65,7 +73,7 @@ class Failed(Exception):
 def parse(path: Path, seen=()) -> list:
     """(file, line number, step, args) for every step, includes expanded."""
     steps = []
-    for n, raw in enumerate(path.read_text().splitlines(), 1):
+    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         words = shlex.split(raw, comments=True)
         if not words:
             continue
@@ -143,17 +151,19 @@ class Pane:
             time.sleep(0.3)
         raise Failed(f"{'never showed' if present else 'still shows'} {text!r} after {secs}s")
 
+    def focused(self) -> str:
+        """The row the focused pane's cursor is on."""
+        for line in self.screen(escapes=True).splitlines():
+            if CURSOR_BG in line:
+                return line
+        return ""
+
     def select(self, text):
         """Down until the focused row holds text; from the bottom, back up."""
-        def focused():
-            for line in self.screen(escapes=True).splitlines():
-                if CURSOR_BG in line:
-                    return line
-            return ""
         for key in ("Down", "Up"):
             last = None
             for _ in range(120):
-                row = focused()
+                row = self.focused()
                 if text in _plain(row):
                     return
                 if row == last:
@@ -170,8 +180,124 @@ class Pane:
             time.sleep(1)
         raise Failed("the app did not quit on Esc")
 
+    def resize(self, cols, rows):
+        tmux("resize-window", "-t", self.name, "-x", str(cols), "-y", str(rows))
+
     def kill(self):
         tmux("kill-session", "-t", self.name, check=False)
+
+
+class ConPtyPane(Pane):
+    """The same pane on Windows: the app in a ConPTY (pywinpty), its output
+    read through a terminal emulator (pyte). The size is the pseudo-console's,
+    so a resize reaches the app as it does from a real window."""
+
+    KEYS = {"Enter": "\r", "Escape": "\x1b", "Up": "\x1b[A", "Down": "\x1b[B",
+            "Tab": "\t", "Space": " ", "BSpace": "\x7f", "Left": "\x1b[D",
+            "Right": "\x1b[C", "Home": "\x1b[H", "End": "\x1b[F", "DC": "\x1b[3~"}
+
+    def __init__(self, name, command, env):
+        super().__init__(name, command, env)
+        self.proc = None
+        self.size = (COLS, ROWS)
+
+    def launch(self, command=None):
+        import threading
+        import pyte
+        import winpty
+        self.kill()
+        command = command or self.command
+        ui = Path(command[-1]).parent / "vendor" / "chotic-ui"
+        env = {**os.environ, **self.env, "PYTHONIOENCODING": "utf-8",
+               **({"PYTHONPATH": str(ui)} if ui.exists() else {})}
+        self.size = (COLS, ROWS)
+        self.term = pyte.Screen(COLS, ROWS)
+        self.lock = threading.Lock()
+        stream = pyte.Stream(self.term)
+        self.proc = winpty.PtyProcess.spawn(command, dimensions=(ROWS, COLS), env=env,
+                                            cwd=str(Path(command[-1]).parent))
+
+        def pump(proc=self.proc):
+            while proc.isalive():
+                try:
+                    data = proc.read(65536)
+                except EOFError:
+                    return
+                with self.lock:
+                    # pyte takes ESC[3J (forget scrollback) for clear-screen
+                    stream.feed(data.replace("\x1b[3J", ""))
+        threading.Thread(target=pump, daemon=True).start()
+
+    def screen(self, escapes=False) -> str:
+        if not self.proc:
+            return ""
+        with self.lock:
+            return "\n".join(line.rstrip() for line in self.term.display)
+
+    def focused(self) -> str:
+        with self.lock:
+            for y, line in enumerate(self.term.display):
+                row = self.term.buffer[y]
+                if any(row[x].bg == CURSOR_HEX for x in range(self.term.columns)):
+                    return line.rstrip()
+        return ""
+
+    def dead(self):
+        if self.proc is None or self.proc.isalive():
+            return None
+        return self.proc.exitstatus or 0
+
+    def press(self, *keys):
+        for key in keys:
+            name = KEYS.get(key.lower(), key)
+            self.proc.write(self.KEYS.get(name, key))
+            time.sleep(0.15)
+
+    def type(self, text):
+        self.proc.write(text)
+
+    def resize(self, cols, rows):
+        self.proc.setwinsize(rows, cols)
+        with self.lock:
+            self.term.resize(rows, cols)
+        self.size = (cols, rows)
+
+    def kill(self):
+        if self.proc and self.proc.isalive():
+            self.proc.terminate(force=True)
+        self.proc = None
+
+
+def make_pane(name, command, env) -> Pane:
+    """tmux where there is one; a Windows pseudo-console where there is not."""
+    return (ConPtyPane if sys.platform == "win32" else Pane)(name, command, env)
+
+
+def _width(text):
+    import unicodedata
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+
+
+def _tidy(screen: str):
+    """The screen is one frame, whole or cut short: a single top and bottom
+    border, rows between them boxed to the same width. What a window too small
+    for it leaves out is fine; anything stacked, wrapped or shifted is not."""
+    lines = [_plain(l) for l in screen.splitlines()]
+    tops = [i for i, l in enumerate(lines) if l.startswith("╭")]
+    bots = [i for i, l in enumerate(lines) if l.startswith("╰")]
+    if len(tops) > 1 or len(bots) > 1 or (bots and not tops):
+        raise Failed(f"borders at rows {tops} and {bots}, want one frame:\n" + screen)
+    if not tops:
+        return
+    end = bots[0] if bots else len(lines)
+    width = _width(lines[tops[0]])
+    whole = lines[tops[0]].endswith("╮")
+    for i in range(tops[0], end + (1 if bots else 0)):
+        line = lines[i]
+        if line[:1] not in ("╭", "│", "├", "╰"):
+            raise Failed(f"row {i} does not start with a border: {line[:40]!r}")
+        if whole and _width(line) != width:
+            raise Failed(f"row {i} is {_width(line)} wide, the frame {width}: {line[-30:]!r}")
 
 
 def _plain(line):
@@ -196,10 +322,10 @@ def run_one(path: Path, out: Path, app: list, auth: Path, keep: bool):
     from src.core.legacy_migration import FRESH_ENV
     env[FRESH_ENV] = os.environ[FRESH_ENV] = "1"
 
-    pane = Pane(f"scn-{path.stem}", app, env)
+    pane = make_pane(f"scn-{path.stem}", app, env)
     steps = parse(path)
     shots = 0
-    log = (out / "steps.txt").open("w")
+    log = (out / "steps.txt").open("w", encoding="utf-8")
     try:
         for file, n, step, args in steps:
             log.write(f"{file}:{n} {step} {' '.join(args)}\n")
@@ -236,11 +362,16 @@ def run_one(path: Path, out: Path, app: list, auth: Path, keep: bool):
                     pane.type(args[0].replace("$CUSTOM", _custom_folder()))
                 elif step == "select":
                     pane.select(args[0])
+                elif step == "tidy":
+                    _tidy(pane.screen())
+                elif step == "resize":
+                    cols, rows = args[0].split("x")
+                    pane.resize(int(cols), int(rows))
                 elif step == "sleep":
                     time.sleep(float(args[0]))
                 elif step == "shot":
                     shots += 1
-                    (out / f"{shots:02}-{args[0]}.txt").write_text(pane.screen())
+                    (out / f"{shots:02}-{args[0]}.txt").write_text(pane.screen(), encoding="utf-8")
                 elif step == "settled":
                     _settled(library)
                 elif step in ("exists", "missing"):
@@ -257,7 +388,7 @@ def run_one(path: Path, out: Path, app: list, auth: Path, keep: bool):
     except Exception:
         return traceback.format_exc(limit=6)
     finally:
-        (out / "last-screen.txt").write_text(pane.screen())
+        (out / "last-screen.txt").write_text(pane.screen(), encoding="utf-8")
         log.close()
         pane.kill()
         for f in (data / "logs").glob("*.log") if (data / "logs").exists() else ():
@@ -287,6 +418,11 @@ def _release(ref: str, out: Path) -> list:
     chotic-ui it pinned and this checkout's UnRAR, which a git archive leaves
     out."""
     src = out / f"src-{ref}"
+    staged = REPO.parent / "releases" / ref  # put there by run_windows_scenarios.sh
+    if staged.exists():
+        if (REPO / "libs").exists():
+            shutil.copytree(REPO / "libs", staged / "libs", dirs_exist_ok=True)
+        return [sys.executable, str(staged / "sync.py")]
     if not src.exists():
         src.mkdir()
 

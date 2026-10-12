@@ -1,0 +1,30 @@
+# A custom drive link long enough to wrap: backspace, the arrows, Home, End and
+# Delete all edit it where the cursor is, and the screen stays one frame.
+setup
+on "BirdmanExe Drive/BirdmanExe"
+launch
+wait "Google Drive checked" 300
+select "Settings"
+press Tab
+select "Add custom drive"
+press Enter
+wait "Link or ID" 30
+type "https://drive.google.com/drive/folders/0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890TAILMARK"
+wait "TAILMARK" 10
+press Backspace Backspace Backspace Backspace
+gone "TAILMARK" 10
+expect "TAIL"
+press Home
+type "HEADMARK"
+wait "HEADMARK" 10
+press End
+type "ENDMARK"
+wait "ENDMARK" 10
+press Home Delete Delete Delete Delete
+refute "HEADMARK"
+expect "MARK"
+press Left Left Left
+press Right
+type "MID"
+wait "MID" 10
+quit

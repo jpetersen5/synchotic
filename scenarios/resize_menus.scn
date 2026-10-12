@@ -1,0 +1,37 @@
+# Resize the home screen and Settings with no key pressed: each redraws on its
+# own to one frame, at sizes down to nothing, and works again once restored.
+setup
+on "BirdmanExe Drive/BirdmanExe"
+launch
+wait "Google Drive checked" 300
+resize 80x24
+sleep 1.5
+tidy
+resize 50x14
+sleep 1.5
+tidy
+resize 24x6
+sleep 1.5
+tidy
+resize 10x3
+sleep 1.5
+tidy
+resize 100x34
+sleep 1.5
+tidy
+expect "Settings"
+select "Settings"
+press Tab
+sleep 1
+tidy
+resize 60x18
+sleep 1.5
+tidy
+resize 30x8
+sleep 1.5
+tidy
+resize 100x34
+sleep 1.5
+tidy
+expect "Add custom drive"
+quit
