@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.core.paths import get_download_path
 from src.sync import cache as cache_mod
 from src.sync.cache import DriveWalks
 
@@ -30,7 +31,12 @@ DRIVE = {"folder_id": "d1", "name": "Drive"}
 
 
 def _walked(tmp_path):
-    return str(tmp_path / "Drive") in cache_mod.get_cache().local_files
+    return _key() in cache_mod.get_cache().local_files
+
+
+def _key():
+    # Windows hands back an extended-length path, so build it the way purge does.
+    return str(get_download_path() / "Drive")
 
 
 def test_it_waits_for_the_drives_last_setlist(app, tmp_path):
@@ -42,7 +48,7 @@ def test_it_waits_for_the_drives_last_setlist(app, tmp_path):
 def test_it_walks_the_drive_once_its_last_setlist_is_down(app, tmp_path):
     app._walk_if_drive_done(DRIVE, {"d1/a", "d1/b"})
     app._drive_walks.wait()
-    assert cache_mod.get_cache().local_files[str(tmp_path / "Drive")] == {"pack/song.ini": 1}
+    assert cache_mod.get_cache().local_files[_key()] == {"pack/song.ini": 1}
 
 
 def test_a_drive_is_walked_once(app, tmp_path, monkeypatch):
