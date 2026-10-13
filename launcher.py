@@ -628,7 +628,13 @@ def host_environment() -> dict:
             env.pop("LD_LIBRARY_PATH", None)
         else:
             env["LD_LIBRARY_PATH"] = orig
-    env["SYNCHOTIC_WINDOW_FILE"] = str(window_state_file())
+    size_file = window_state_file()
+    try:
+        # The host config only writes the file; it can't make the folder.
+        size_file.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    env["SYNCHOTIC_WINDOW_FILE"] = str(size_file)
     return env
 
 

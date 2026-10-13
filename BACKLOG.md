@@ -2,6 +2,25 @@
 
 ## Inbox
 
+- [ ] [ops] launcher release with the resize-freeze fix *(2026-10-12, hababa2)*
+  - Dragging a window corner on Windows froze the machine for seconds: `wezterm.lua` ran `os.execute('mkdir -p ...')` on every `window-resized` event, on the thread that draws the window (120 resizes took 26 s and spawned 242 processes). Fixed in `544a5b5` (size saved from `update-status` once it holds, launcher makes the folder), but the lua ships inside the launcher, so it only reaches people with a new launcher release.
+  - Not urgent (no data at risk, one report). Do it deliberately: `release-launcher.yml` is manual, installed launchers only replace themselves if the notes carry `<!-- app-updates-launcher -->`, and the update path has to be tried by hand on all three platforms first (see the launcher self-update gaps below).
+  - No user-side workaround: `install_host_config` puts the launcher's own bundled lua back on every launch. Also never saved the window size on Windows before, since `window.txt` became a directory.
+  - Run `scripts/run_windows_wezterm.sh winprox` against the built launcher's lua before releasing.
+
+- [ ] [bug] the input line's cursor maths ignores wide characters *(2026-10-09)*
+  - `LineEditor` counts one column per character, so a pasted Japanese, Chinese or Korean path puts the cursor in the wrong place on a wrapped line. Display width is already used for clipping (`display_width` in chotic-ui), not for the cursor.
+
+- [ ] [cosmetic] `Menu` pads rows with `len(strip_ansi())` *(2026-10-09)*
+  - A row with wide characters is padded short, so its right border sits two columns left. Clipping is correct (everything goes through `fit_to_window`), only the padding is off.
+
+- [ ] [testing] scenarios have no run with CJK chart names on the sync screen *(2026-10-12)*
+  - No small Drive setlist has them, so the stacked-border bug is covered by unit tests and ConPTY sweeps but not by a scenario. Needs a fixture drive or a local-only way to feed the sync screen.
+  - Also not covered: Linux (scenarios run on macOS and, via `scripts/run_windows_scenarios.sh`, Windows), and Ctrl+V on Linux, which only has `wl-paste` on Wayland untested.
+
+- [ ] [perf] "Google Drive checked" sometimes takes minutes *(2026-10-09)*
+  - Two scenario runs waited 352 s (`custom_drive`) and 251 s (`notepad_settings`) on a first scan, against 35 s normally; the next run was fast. Not reproduced. If it is quota or retry back-off, the screen says nothing while it waits.
+
 - [ ] [ux] home still shows a drive's download right after a sync finishes *(2026-10-07)*
   - On a 330 GB NAS library, Misc read +1.33 GB and 33 charts after a sync that had fetched them; the planner said 0. The figures were recomputed while 3 drives were still mid-rescan. Not reproduced in `scripts/scenarios.py` runs with four small setlists, so it may need a large, slow library.
 

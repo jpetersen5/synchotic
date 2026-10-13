@@ -32,15 +32,25 @@ end
 config.initial_cols = cols
 config.initial_rows = rows
 
-wezterm.on('window-resized', function(_window, pane)
-  local dims = pane:get_dimensions()
-  local path = size_file()
-  os.execute('mkdir -p "' .. path:gsub('/[^/]*$', '') .. '"')
-  local f = io.open(path, 'w')
-  if f then
-    f:write(tostring(dims.cols) .. '\n' .. tostring(dims.viewport_rows) .. '\n')
-    f:close()
+-- Not on 'window-resized': that fires for every size a drag passes through, on
+-- the thread that draws the window, and spawning a process in it (os.execute)
+-- cost about 0.2 s an event on Windows, so a drag froze the machine for
+-- seconds. Look once a second instead and save a size once it has held for a
+-- tick. The folder is the launcher's to create, which it does.
+local seen, saved
+wezterm.on('update-status', function(_window, pane)
+  local ok, dims = pcall(function() return pane:get_dimensions() end)
+  if not ok then return end
+  local size = tostring(dims.cols) .. '\n' .. tostring(dims.viewport_rows) .. '\n'
+  if size == seen and size ~= saved then
+    local f = io.open(size_file(), 'w')
+    if f then
+      f:write(size)
+      f:close()
+      saved = size
+    end
   end
+  seen = size
 end)
 
 config.enable_tab_bar = false
