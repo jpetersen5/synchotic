@@ -1,32 +1,39 @@
 Bring Your Own Credentials - Setup Instructions
 ===============================================
 
-If you find that you keep hitting rate limits with rclone or would prefer
-higher download speeds, you can create your own Google OAuth credentials to
-use with Synchotic! This takes about ten minutes to set up in a browser but
-guarantees you get your own drive quota at full speeds rather than sharing it
-with every other rclone user.
+Google only lets a small number of people sign in through Synchotic's own
+Google app, and the rclone option is being retired. So to download everything,
+including game rips and large chart packs, you make your own small Google app
+and sign in through that instead. It takes about ten minutes in a browser, and
+you only ever do it once.
 
 Anywhere below that gives you a name to type, the name does not matter to
 Google. Type exactly what is written and you cannot get it wrong.
 
+Each step has a link. They all open in whichever project is picked in the
+dropdown at the top of the page, so once step 1 is done, check that dropdown
+says synchotic-byoc whenever you open a link.
+
+A banner about "Cloud Hub" or a dashboard shutting down is about Google's own
+home page, not these steps. Ignore it.
+
 Instructions:
 
 1. MAKE A PROJECT
-   Go to console.cloud.google.com and sign in.
-   Project dropdown at the top, then "New Project".
+   https://console.cloud.google.com/projectcreate
      Project name:  synchotic-byoc
      Location:      leave whatever it already says
-   Click Create, wait a few seconds, then pick synchotic-byoc in that same
+   Click Create, wait a few seconds, then pick synchotic-byoc in the project
    dropdown at the top. Everything after this happens inside that project.
+   (Google may add numbers to the end of the project ID. That is fine.)
 
 2. TURN ON GOOGLE DRIVE
-   Left menu: "APIs and Services", then "Library".
-   Search "Google Drive API". Open it, click Enable.
+   https://console.cloud.google.com/apis/library/drive.googleapis.com
+   Click Enable.
 
 3. FILL IN THE APP INFO
-   Left menu: "APIs and Services", then "OAuth consent screen".
-   Google now calls this page "Google Auth Platform". Click "Get started".
+   https://console.cloud.google.com/auth/overview
+   Click "Get started".
 
    App Information
      App name:            Synchotic
@@ -39,8 +46,8 @@ Instructions:
      tick the box agreeing to the user data policy, then Create.
 
 4. SAY WHAT YOU ARE ASKING FOR
-   Left menu of that same page: "Data Access", then "Add or remove scopes".
-   In the filter box paste:
+   https://console.cloud.google.com/auth/scopes
+   Click "Add or remove scopes". In the filter box paste:
 
      https://www.googleapis.com/auth/drive.readonly
 
@@ -48,61 +55,69 @@ Instructions:
    Google will call this a restricted scope and warn you. That is expected.
    Nothing is being sent anywhere, the app runs on your own machine.
 
-5. PUBLISH IT (DO NOT SKIP)
-   Left menu: "Audience". Under "Publishing status" click "Publish app"
-   and confirm.
-   It must end up saying "In production". If it says "Testing", Google
-   throws away your sign-in every 7 days and Synchotic keeps logging you out.
-
-   If Google refuses and says your configuration is incomplete, go to
-   "Branding" in that same left menu and fill in whatever it has flagged:
+5. FILL IN THE BRANDING
+   https://console.cloud.google.com/auth/branding
+   Google will not publish the app (next step) until these are filled in:
      App name:                   Synchotic
      User support email:         your own address
      App logo:                   leave empty
-     Application home page:      https://github.com/noahbaxter/synchotic
+     Application home page:      https://noahbaxter.dev/synchotic/
      Privacy policy link:        https://noahbaxter.dev/synchotic/privacy.html
-     Terms of service link:      leave empty unless it insists, then use
-                                 https://github.com/noahbaxter/synchotic
-     Authorized domains:         github.com
-                                 noahbaxter.dev
+     Terms of service link:      leave empty
+     Authorized domains:         noahbaxter.dev  (only if it asks)
      Developer contact:          your own address
-   Save, then go back to "Audience" and publish again.
+   Click Save.
 
-   You do NOT need Google to verify the app. Unverified is fine. The only
-   thing that costs you is one scary screen the first time you sign in.
+6. PUBLISH IT (DO NOT SKIP)
+   https://console.cloud.google.com/auth/audience
+   Under "Publishing status" click "Publish app" and confirm.
+   It must end up saying "In production". If it says "Testing", Google
+   throws away your sign-in every 7 days and Synchotic keeps logging you out.
 
-6. MAKE THE KEY
-   Left menu: "Clients", then "Create client".
+   Google will then say "Your app requires verification" and ask you to
+   submit it for review. Ignore that. It only matters for apps used by more
+   than 100 people, and this one is used by you. The only thing being
+   unverified costs you is one scary screen the first time you sign in.
+
+7. MAKE THE KEY
+   https://console.cloud.google.com/auth/clients/create
      Application type:  Desktop app
-     Name:              Synchotic desktop
+     Name:              leave the name it suggests
    Click Create.
 
-7. DOWNLOAD IT
-   In the box that pops up, click "Download JSON". If you closed the box,
-   click your client in the list and use the download button at the top.
+   In the box that pops up, click "Download JSON" RIGHT AWAY. Google only
+   shows the secret part of the key this once. If you closed the box without
+   downloading, delete that client and make a new one.
 
 8. INSTALL IT
    Rename the file you just downloaded to "credentials.json" exactly.
    Move it into this folder, right next to these instructions.
 
 9. ENABLE IT
-   Start Synchotic, press D, choose "Use your own Google credentials", and
-   sign in with the same Google account.
+   In Synchotic go to Settings > Account > Mode and choose
+   "Bring Your Own Credentials". It signs you in straight away: use the same
+   Google account.
    Google will say the app is not verified. It is yours. Click "Advanced",
-   then "Go to ... (unsafe)".
+   then "Go to Synchotic (unsafe)".
 
 
 FAQ
 ---
 Why am I being signed out every 7 days?
-   Step 5 did not stick. Open "Audience" again. If publishing status still
-   says "Testing", set it to "In production" and sign in again.
+   Step 6 did not stick. Open the Audience link again. If publishing status
+   still says "Testing", set it to "In production" and sign in again.
+
+Google will not let me publish.
+   Something in step 5 is missing. Open the Branding link, fill in whatever
+   it has flagged, Save, then publish again.
 
 Why does Synchotic say it is not set up?
-   The file must be named exactly "credentials.json", not "credentials(1).json",
-   and must sit in this folder, beside these instructions.
+   The file must be named exactly "credentials.json", not "credentials(1).json"
+   or "client_secret_....json", and must sit in this folder, beside these
+   instructions.
 
 The menu names do not match what I see.
    Google renames these pages every few months. "OAuth consent screen",
    "Google Auth Platform", "Branding", "Audience", "Clients" and "Data Access"
-   are all the same area. Look for the words in bold above, not the exact path.
+   are all the same area. The links above go straight to each page, so use
+   them rather than the menus where you can.

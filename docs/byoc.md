@@ -1,110 +1,137 @@
 # Bring Your Own Credentials (BYOC)
 
-Synchotic ships with a shared Google OAuth client. That shared client has a fixed
-quota, so when too many people use it at once you can hit a cap and get throttled.
-BYOC lets you supply your own Google OAuth client instead. With your own client you
-get full-speed downloads on your own quota, with no rclone tier in between. This guide
-walks you through creating a Google OAuth client and handing it to Synchotic.
+Google caps how many people can sign in through Synchotic's own Google app, and
+rclone's shared sign-in is being retired. So the way to download everything,
+including the game rips and large chart packs Google blocks for anonymous
+downloads, is to make your own small Google app and sign in through it. It takes
+about ten minutes in a browser, once.
 
-If you just want it to work and do not care about speed, you do not need this. BYOC is
-for users hitting the shared-app cap or who want full speed without the rclone tier.
+Synchotic writes these same steps to `BYOC_SETUP_INSTRUCTIONS.txt` in its data
+folder when you pick BYOC, and opens that folder, which is where the file you
+download in step 7 goes.
 
-## 1. Create a Google Cloud project
+Each link below opens in whichever project is selected in the dropdown at the
+top of the Cloud Console. After step 1, check that it says `synchotic-byoc`
+whenever you open one. A banner about Cloud Hub or the dashboard shutting down
+is about Google's home page, not these steps.
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com).
-2. In the project dropdown at the top, click **New Project**.
-3. Give it any name (for example `synchotic`) and click **Create**.
-4. Make sure the new project is selected before continuing.
+## 1. Make a project
 
-## 2. Enable the Google Drive API
+[console.cloud.google.com/projectcreate](https://console.cloud.google.com/projectcreate)
 
-1. In the left menu, go to **APIs and Services -> Library**.
-2. Search for **Google Drive API**.
-3. Open it and click **Enable**.
+- **Project name:** `synchotic-byoc`. Leave the location as it is.
+- Click **Create**, then pick `synchotic-byoc` in the project dropdown. Google
+  may add numbers to the end of the project ID; that is fine.
 
-## 3. Configure the OAuth consent screen
+## 2. Turn on the Google Drive API
 
-1. Go to **APIs and Services -> OAuth consent screen**.
-2. Choose **User type: External** and click **Create**.
-3. Fill in the required fields: app name, user support email, and developer contact
-   email. The rest can be left blank.
-4. On the **Scopes** step, click **Add or Remove Scopes** and add:
+[console.cloud.google.com/apis/library/drive.googleapis.com](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+→ **Enable**.
 
-   ```
-   https://www.googleapis.com/auth/drive.readonly
-   ```
+## 3. Fill in the app info
 
-5. On the **Test users** step, add your own Google account. This matters only while the
-   app is in Testing status (see the next step), but add yourself anyway so you are
-   covered either way.
+[console.cloud.google.com/auth/overview](https://console.cloud.google.com/auth/overview)
+→ **Get started**.
 
-## 4. IMPORTANT: set Publishing status to "In production"
+- **App name:** `Synchotic`. **User support email:** your own address.
+- **Audience:** External.
+- **Contact information:** your own address.
+- Agree to the user data policy, then **Create**.
 
-> **Warning: do not skip this.** This is the single most important step. If you leave the
-> app in **Testing** publishing status, Google issues refresh tokens that **expire every
-> 7 days**. Synchotic will silently sign you out about once a week, and you will have to
-> sign in again every time. Setting the status to **In production** fixes this permanently.
+## 4. Add the Drive scope
 
-1. Go to **APIs and Services -> OAuth consent screen**.
-2. Under **Publishing status**, click **Publish App** to move the app to
-   **In production**.
-
-You do **not** need to go through Google's verification process. An app that is
-**In production** but **unverified** works fine for BYOC. The only effect of being
-unverified is that the first time you sign in, Google shows a one-time
-"Google hasn't verified this app" screen. Click **Advanced** and then continue. After
-that, your refresh tokens persist and you stay signed in.
-
-To recap the difference:
-
-- **Testing** status: tokens expire every 7 days, you get logged out weekly. Do not use.
-- **In production**, unverified: one consent interstitial the first time, then you stay
-  signed in. This is what you want.
-
-## 5. Create an OAuth client ID
-
-1. Go to **APIs and Services -> Credentials**.
-2. Click **Create Credentials -> OAuth client ID**.
-3. For **Application type**, choose **Desktop app**.
-4. Give it any name and click **Create**.
-5. Google shows your **Client ID** and **Client secret**. Keep this dialog open, or
-   click **Download JSON** to save the client file.
-
-## 6. Give the credentials to Synchotic
-
-You have two options. Pick one.
-
-### Option A: credentials file
-
-Save the downloaded client JSON as `credentials.json` inside Synchotic's data directory:
+[console.cloud.google.com/auth/scopes](https://console.cloud.google.com/auth/scopes)
+→ **Add or remove scopes**, paste this into the filter, tick it, **Update**,
+then **Save**:
 
 ```
-.dm-sync/credentials.json
+https://www.googleapis.com/auth/drive.readonly
 ```
 
-This is the `.dm-sync` folder next to Synchotic's other data. The file is the standard
-Google OAuth client JSON. Synchotic reads either the `installed` or the `web` key from it,
-so the file Google gives you for a Desktop app works as-is.
+Google calls this a restricted scope and warns you. That is expected: the app
+runs on your machine and nothing is sent anywhere.
 
-### Option B: environment variables
+## 5. Fill in the branding
 
-Set these two environment variables to the Client ID and Client secret from step 5:
+[console.cloud.google.com/auth/branding](https://console.cloud.google.com/auth/branding)
+
+Google will not publish the app until these are set:
+
+| Field | Value |
+|---|---|
+| App name | `Synchotic` |
+| User support email | your own address |
+| App logo | leave empty |
+| Application home page | `https://noahbaxter.dev/synchotic/` |
+| Privacy policy link | `https://noahbaxter.dev/synchotic/privacy.html` |
+| Terms of service link | leave empty |
+| Authorized domains | `noahbaxter.dev`, only if it asks |
+| Developer contact | your own address |
+
+**Save.**
+
+## 6. Publish it (do not skip)
+
+[console.cloud.google.com/auth/audience](https://console.cloud.google.com/auth/audience)
+→ **Publish app** → confirm. It must say **In production**.
+
+> **Warning:** left in **Testing**, Google expires your sign-in every 7 days and
+> Synchotic signs you out weekly.
+
+Google then says *"Your app requires verification"* and asks you to submit it
+for review. Ignore it. Verification is for apps with more than 100 users; an
+unverified app in production works for you, and the only cost is a one-time
+"Google hasn't verified this app" screen when you sign in.
+
+## 7. Create the client and download it
+
+[console.cloud.google.com/auth/clients/create](https://console.cloud.google.com/auth/clients/create)
+
+- **Application type:** Desktop app. **Name:** leave the suggested one.
+- **Create**, then click **Download JSON** right away. Google shows the client
+  secret only once, at creation. If you close the dialog without downloading,
+  delete the client and create a new one.
+
+## 8. Install it
+
+Rename the download to exactly `credentials.json` and put it in Synchotic's data
+folder: **Settings > App > Open data** opens it, next to
+`BYOC_SETUP_INSTRUCTIONS.txt`.
+
+| Windows | macOS | Linux |
+|---|---|---|
+| `%LOCALAPPDATA%\Synchotic\Data` | `~/Library/Application Support/Synchotic` | `~/.local/share/synchotic` |
+
+## 9. Turn it on
+
+In Synchotic: **Settings > Account > Mode** → **Bring Your Own Credentials**.
+Sign-in opens straight away; use the same Google account. On Google's "unverified
+app" screen click **Advanced**, then **Go to Synchotic (unsafe)**.
+
+## Troubleshooting
+
+**Signed out about once a week.** The app is still in Testing. Redo step 6, then
+sign in again.
+
+**Google will not publish.** Something in step 5 is missing. Fill in what the
+Branding page flags, save, and publish again.
+
+**Synchotic says BYOC is not set up.** The file must be named exactly
+`credentials.json` (not `credentials(1).json` or `client_secret_….json`) and sit
+in the data folder.
+
+<details>
+<summary><strong>For developers: environment variables</strong></summary>
+
+Instead of the file, set both of these to the client ID and secret from step 7.
+When both are set they take precedence over `credentials.json`.
 
 ```
 SYNCHOTIC_OAUTH_CLIENT_ID
 SYNCHOTIC_OAUTH_CLIENT_SECRET
 ```
 
-If both are set, Synchotic uses them and ignores the credentials file.
+A source checkout keeps its data in `.dm-sync/` beside the checkout unless
+`SYNCHOTIC_OS_DIRS=1`, or when run through the `synchotic` command.
 
-## 7. Sign in
-
-Start Synchotic and sign in as normal. You will now be using your own OAuth client, your
-own quota, and full-speed downloads. The first sign-in shows the one-time
-"Google hasn't verified this app" screen described in step 4; click through it once.
-
-## Troubleshooting
-
-**"It keeps signing me out after about a week."** Your OAuth app is still in **Testing**
-publishing status, so Google is expiring your refresh token every 7 days. Go back to
-step 4 and set the publishing status to **In production**, then sign in again.
+</details>
