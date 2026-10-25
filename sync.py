@@ -40,7 +40,7 @@ from src.app.sync_flow import SyncFlowMixin
 from src.drive import DriveClient, AuthManager
 from src.sync import FolderSync
 from src.config import UserSettings, DrivesConfig, CustomFolders
-from src.config.settings import DOWNLOAD_MODES
+from src.config.settings import DOWNLOAD_MODE_BYOC, DOWNLOAD_MODES
 from src.core.paths import (
     LibraryUnavailable,
     library_is_set,
@@ -139,8 +139,62 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
 
     def run(self):
         """Main application loop."""
+        self._start_session()
+        self._menu_loop()
+
+    def run_once(self) -> int:
+        """--sync: start up as run() does, sync once, and exit.
+
+        Everything interactive stays interactive (the sign-in offer, the
+        preflight question, the large-purge question) because this is meant
+        for a double-clicked .bat or shortcut, which has a console. Returns the
+        exit code: 0 synced, 1 could not start, 2 failed, 3 cancelled.
+        """
+        from src.app.sync_flow import (SYNC_BLOCKED, SYNC_CANCELLED,
+                                       SYNC_DONE, SYNC_FAILED)
+        from src.ui.primitives import getch, wait_with_skip
+
+        # The menu's sign-in row is where a dead grant gets fixed, and --sync
+        # never shows the menu. Check it before the offer, not at preflight.
+        self._start_session(check_signin=True)
+
+        if self.folders:
+            self.handle_sync(pause_after=False)
+            outcome = self.last_sync_outcome
+        else:
+            # The menu would show the empty list; here there is only this.
+            print()
+            display.say(copy.NO_DRIVES)
+            outcome = SYNC_BLOCKED
+
+        if self.auth and self.auth.session_expired:
+            display.session_expired_notice()
+
+        # A clean run closes by itself. Anything else waits, or the window
+        # takes the reason with it when it closes.
+        if outcome == SYNC_DONE:
+            wait_with_skip(5, copy.CLOSING_IN)
+        else:
+            print(f"\n{copy.PRESS_TO_CLOSE}")
+            getch()
+
+        self._stop_background_scan()
+        from chotic_ui.primitives.host import leave_alt_screen
+        leave_alt_screen()
+        # On the real screen, which is all a terminal keeps after exit.
+        print(copy.SYNC_EXIT[outcome])
+        return {SYNC_DONE: 0, SYNC_BLOCKED: 1, SYNC_FAILED: 2,
+                SYNC_CANCELLED: 3}[outcome]
+
+    def _start_session(self, check_signin: bool = False):
+        """Everything between startup setup and the first menu: the sign-in
+        offer, loading drives, and starting the background scan."""
         clear_screen()
         print_header()
+
+        if (check_signin and self.auth.is_available
+                and self.user_settings.download_mode == DOWNLOAD_MODE_BYOC):
+            self.auth.check_signin()
 
         if self._should_offer_signin():
             if show_oauth_prompt():
@@ -170,6 +224,8 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
         if self._background_scanner:
             debug_log(f"[timing] bg_scanner started: {(_time.time() - _t_scan)*1000:.0f}ms")
 
+    def _menu_loop(self):
+        """The home screen, until the user quits."""
         selected_index = 0  # Track selected position for maintaining after actions
         menu_cache = None  # Cache for expensive menu calculations
         start_time = os.environ.get("SYNCHOTIC_START_TIME")  # For startup timing
@@ -390,6 +446,14 @@ def main():
              "click), anonymous (skip them), byoc (your own credentials). Saved "
              "for next time. Use anonymous on a machine with no browser.",
     )
+    parser.add_argument(
+        "--sync", action="store_true",
+        help="sync the drives and setlists already turned on, then exit, "
+             "without opening the menu. For a .bat or shortcut. Still asks "
+             "whatever a sync would ask (sign-in, a large delete), so run it "
+             "with a console. Exit code: 0 synced, 1 could not start, "
+             "2 failed, 3 cancelled.",
+    )
     # Parsed before the alternate screen opens. --help and a bad argument both
     # print and exit, and anything printed into that buffer is discarded when
     # the exit handler closes it, so --help showed the user nothing at all.
@@ -555,6 +619,8 @@ def main():
         sys.exit(0)
     debug_log(f"[timing] SyncApp init: {(_time.time() - _t1)*1000:.0f}ms")
 
+    if cli_args.sync:
+        sys.exit(app.run_once())
     app.run()
 
 

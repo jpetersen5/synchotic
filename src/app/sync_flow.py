@@ -15,7 +15,17 @@ from src.ui.primitives.spinner import working
 from src.ui.widgets import display
 
 
+# What the last handle_sync came to. --sync turns it into the exit code, since
+# a double-clicked .bat has nothing else to go on once the window closes.
+SYNC_DONE = "done"            # synced, or nothing needed syncing
+SYNC_BLOCKED = "blocked"      # never started: preflight, sign-in, library
+SYNC_FAILED = "failed"        # the scans died, so nothing could download
+SYNC_CANCELLED = "cancelled"  # ESC during the run
+
+
 class SyncFlowMixin:
+
+    last_sync_outcome: str = ""
 
     def _preflight_ok(self) -> bool:
         """Stop, or ask, before a sync that cannot work, will not fit, or
@@ -45,16 +55,22 @@ class SyncFlowMixin:
         concerns, free = working(copy.CHECKING_LIBRARY, gather)
         return confirm_sync(concerns, plain_path(library), free)
 
-    def handle_sync(self):
+    def handle_sync(self, pause_after: bool = True):
         """Sync enabled setlists as they become ready, then purge extras.
 
         Downloads at setlist granularity — as soon as any setlist finishes scanning,
         its files are downloaded immediately. Only waits when no setlists are ready.
         Purge runs after all downloading is complete.
 
-        Returns menu_cache if recomputed, or None if cancelled/no-op.
+        `pause_after` holds the result on screen before returning to the menu;
+        --sync passes False and does its own closing pause.
+
+        Returns menu_cache if recomputed, or None if cancelled/no-op. How it
+        ended is left in last_sync_outcome (one of the SYNC_* values).
         """
         import time as _time
+
+        self.last_sync_outcome = SYNC_BLOCKED
 
         # Sync streams its own progress, so give it the screen. Without this it
         # prints underneath the menu box that is still on screen.
@@ -196,23 +212,28 @@ class SyncFlowMixin:
             progress.print_error_summary()
 
         if was_cancelled:
+            self.last_sync_outcome = SYNC_CANCELLED
             display.sync_cancelled(total_downloaded)
         elif total_downloaded > 0:
+            self.last_sync_outcome = SYNC_DONE
             display.sync_complete(total_downloaded, total_bytes, elapsed)
         elif self._scan_failure():
             # Nothing downloaded because the scans died, not because the
             # library was already current. Saying "synced" here is how a
             # total failure reads as a clean run.
+            self.last_sync_outcome = SYNC_FAILED
             reason, failed = self._scan_failure()
             display.sync_failed(reason, failed)
         else:
+            self.last_sync_outcome = SYNC_DONE
             display.sync_already_synced()
 
         # The whole run, not just the download phase's `elapsed`.
         print(f"  {copy.FINISHED_IN.format(time=format_duration(_time.time() - run_start))}")
 
         # NOW we can say "done" — because it actually is
-        wait_with_skip(5, copy.CONTINUING_IN)
+        if pause_after:
+            wait_with_skip(5, copy.CONTINUING_IN)
         return menu_cache
 
     def _walk_if_drive_done(self, drive: dict, downloaded_ids: set) -> None:

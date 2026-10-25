@@ -77,6 +77,12 @@ def test_help_prints_the_usage(helped):
     assert code == 0
 
 
+def test_help_lists_sync(helped):
+    _, output = helped
+
+    assert "--sync" in ANSI.sub("", output)
+
+
 def test_help_never_opens_the_alternate_screen(helped):
     """The buffer is discarded on exit, so text written into it is lost."""
     _, output = helped

@@ -454,6 +454,16 @@ DID_NOT_DOWNLOAD = "{charts} failed to download"
 FINISHED_IN = "Finished in {time}"
 CONTINUING_IN = "Continuing in 5s (press any key to skip)"
 
+# --sync: one sync from the command line, then exit
+CLOSING_IN = "Closing in 5s (press any key to close now)"
+PRESS_TO_CLOSE = "Press any key to close"
+SYNC_EXIT = {
+    "done": "Sync finished",
+    "blocked": "Sync could not start",
+    "failed": "Sync failed",
+    "cancelled": "Sync cancelled",
+}
+
 
 # ===========================================================================
 # Startup: what a launch did to an older install

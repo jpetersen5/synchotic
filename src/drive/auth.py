@@ -562,6 +562,24 @@ class AuthManager:
         """The saved sign-in died and only a fresh sign-in will fix it."""
         return self._user_oauth.session_expired
 
+    def check_signin(self) -> bool:
+        """Refresh the user's saved token now if it is due, rather than at the
+        first download.
+
+        is_signed_in only proves the file parses, so a grant Google has revoked
+        reads as signed in until something refreshes it. A refused refresh
+        drops the token, after which is_signed_in is False and the sign-in
+        offer fires. True when the token works. An offline refresh keeps the
+        token and returns False. Never falls back to the admin client, which
+        can open a browser of its own.
+        """
+        if not self._user_oauth.is_signed_in:
+            return False
+        try:
+            return bool(self._user_oauth.get_token())
+        except Exception:
+            return False
+
 
     def sign_out(self):
         """Sign out the current user."""

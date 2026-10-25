@@ -22,6 +22,17 @@ In the left column are chart **drives** that contain **setlists** in the right c
 
 To sync press S. This will download, update and delete files to match exclusively the setlists you've selected.
 
+### One-click sync
+
+`--sync` syncs whatever is already turned on and exits, skipping the menu. Set things up in the app once, then put this in a `.bat` (or a shortcut) next to the launcher:
+
+```bat
+@echo off
+"%~dp0synchotic-launcher.exe" --sync
+```
+
+It still asks anything a sync would ask (signing in again, a large delete), so run it with a console window. A clean run closes by itself; anything else waits for a key so you can read why. Exit code: 0 synced, 1 could not start, 2 failed, 3 cancelled.
+
 ## Library
 
 Synchotic keeps one local folder in sync with the drives and setlists you choose. **BE WARNED:** any unmanaged files in this folder **WILL BE DELETED** on sync. Pick an empty folder or a previous sync folder or face the consequences...
