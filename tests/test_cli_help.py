@@ -83,6 +83,22 @@ def test_help_lists_sync(helped):
     assert "--sync" in ANSI.sub("", output)
 
 
+def test_help_lists_no_purge(helped):
+    _, output = helped
+
+    assert "--no-purge" in ANSI.sub("", output)
+
+
+def test_no_purge_is_refused_outside_sync():
+    """In the menu it would show Purge as Off while the setting is On, and
+    toggling that row would flip the saved value."""
+    code, output = _run_on_a_tty("--no-purge")
+
+    assert code != 0
+    assert "--no-purge only works with --sync" in ANSI.sub("", output)
+    assert ENTER_ALT_SCREEN not in output
+
+
 def test_help_never_opens_the_alternate_screen(helped):
     """The buffer is discarded on exit, so text written into it is lost."""
     _, output = helped

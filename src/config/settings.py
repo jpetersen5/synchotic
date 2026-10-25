@@ -109,7 +109,11 @@ def _as_bool(value):
 
 def purges(user_settings) -> bool:
     """Whether sync deletes what the enabled drives and setlists do not have.
-    No settings means the default."""
+    No settings means the default. --no-purge pauses it for one run without
+    touching the setting."""
+    # `is True`: anything else (a stand-in object, a Mock) is not a pause.
+    if getattr(user_settings, "purge_paused", False) is True:
+        return False
     return getattr(user_settings, "purge_on_sync", True)
 
 
@@ -233,6 +237,12 @@ class UserSettings:
 
     # Fields are declared in SETTING_FIELDS and documented in
     # docs/settings.template.jsonc, which is the file the user edits.
+
+    # --no-purge, for this run only. Never saved, since save() writes only
+    # SETTING_FIELDS. A class attribute rather than one set in __init__, so
+    # reload(), which copies a fresh instance's attributes over this one,
+    # cannot quietly turn deleting back on partway through a run.
+    purge_paused = False
 
     def __init__(self, path: Path):
         self.path = path

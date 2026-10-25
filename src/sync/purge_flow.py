@@ -107,6 +107,7 @@ def purge_all_folders(
     cancel_check=None,
     pause_keys=None,
     resume_keys=None,
+    confirm_any=False,
 ):
     """Purge files that shouldn't be synced. Uses marker files as source of truth.
 
@@ -119,6 +120,8 @@ def purge_all_folders(
         progress: The sync run's panel, which purge draws into.
         cancel_check: Polled between drives while planning.
         pause_keys/resume_keys: Hand stdin to ConfirmDialog and take it back.
+        confirm_any: Ask before deleting anything at all, not only past the
+            thresholds. --sync, where nobody is looking at the toggles.
     """
     from ..core.formatting import normalize_path_key
     from .markers import get_all_marker_files
@@ -208,7 +211,8 @@ def purge_all_folders(
         if cancelled:
             # Stop means stop: not even the partials sweep, another walk.
             plans, sweep = [], False
-        elif (asked_files > PURGE_CONFIRM_FILE_THRESHOLD
+        elif ((confirm_any and asked_files > 0)
+              or asked_files > PURGE_CONFIRM_FILE_THRESHOLD
               or asked_size > PURGE_CONFIRM_SIZE_THRESHOLD):
             if not _confirmed(asked_files, asked_size, progress, pause_keys, resume_keys):
                 debug_log(f"PURGE_SKIPPED | files={asked_files} | user declined")

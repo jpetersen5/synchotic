@@ -55,7 +55,7 @@ class SyncFlowMixin:
         concerns, free = working(copy.CHECKING_LIBRARY, gather)
         return confirm_sync(concerns, plain_path(library), free)
 
-    def handle_sync(self, pause_after: bool = True):
+    def handle_sync(self, pause_after: bool = True, confirm_any_delete: bool = False):
         """Sync enabled setlists as they become ready, then purge extras.
 
         Downloads at setlist granularity — as soon as any setlist finishes scanning,
@@ -64,6 +64,8 @@ class SyncFlowMixin:
 
         `pause_after` holds the result on screen before returning to the menu;
         --sync passes False and does its own closing pause.
+        `confirm_any_delete` asks before purging anything, however little,
+        instead of only past the usual thresholds. --sync passes True.
 
         Returns menu_cache if recomputed, or None if cancelled/no-op. How it
         ended is left in last_sync_outcome (one of the SYNC_* values).
@@ -187,6 +189,7 @@ class SyncFlowMixin:
                     self.folders, get_download_path(), self.user_settings, failed_setlists,
                     progress=progress, cancel_check=lambda: progress.cancelled,
                     pause_keys=pause_keys, resume_keys=resume_keys,
+                    confirm_any=confirm_any_delete,
                 )
                 debug_log(f"TIMING | purge: {_time.time() - t0:.1f}s")
                 for fid in purged_ids:

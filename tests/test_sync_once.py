@@ -46,9 +46,10 @@ def once(monkeypatch):
     def start(self, check_signin=False):
         seen["check_signin"] = check_signin
 
-    def sync(self, pause_after=True):
+    def sync(self, pause_after=True, confirm_any_delete=False):
         seen["synced"] += 1
         seen["pause_after"] = pause_after
+        seen["confirm_any_delete"] = confirm_any_delete
         self.last_sync_outcome = seen["outcome"]
 
     monkeypatch.setattr(SyncApp, "_start_session", start)
@@ -77,6 +78,16 @@ def test_it_checks_the_sign_in_and_skips_the_menus_pause(once):
 
     assert seen["check_signin"] is True
     assert seen["pause_after"] is False, "a 'Continuing in 5s' to nowhere"
+
+
+def test_it_asks_before_any_delete(once):
+    """Nobody just looked at the toggles, so no deletion is too small to ask."""
+    app, seen = once
+    seen["outcome"] = SYNC_DONE
+
+    app.run_once()
+
+    assert seen["confirm_any_delete"] is True
 
 
 def test_a_clean_run_closes_by_itself(once):
@@ -326,7 +337,9 @@ def sync_app(tmp_path, monkeypatch):
                         lambda *a, **k: waits.append(a))
     monkeypatch.setattr("src.app.sync_flow.rebuild_markers_from_disk",
                         lambda *a, **k: (0, 0))
-    monkeypatch.setattr("src.app.sync_flow.purge_all_folders", lambda *a, **k: set())
+    purged = {}
+    monkeypatch.setattr("src.app.sync_flow.purge_all_folders",
+                        lambda *a, **k: purged.update(k) or set())
     monkeypatch.setattr("src.app.sync_flow.compute_main_menu_cache",
                         lambda *a, **k: "cache")
 
@@ -354,6 +367,7 @@ def sync_app(tmp_path, monkeypatch):
     monkeypatch.setattr(type(app), "_get_combined_drives_config", lambda self: None)
     monkeypatch.setattr(type(app), "_preflight_ok", lambda self: True)
     monkeypatch.setattr(type(app), "_scan_failure", lambda self: None)
+    app._purged = purged
     return app, waits
 
 
@@ -391,3 +405,15 @@ def test_the_menu_still_pauses_and_sync_once_does_not(sync_app):
 
     app.handle_sync(pause_after=False)
     assert len(waits) == 1
+
+
+def test_the_menu_keeps_the_usual_thresholds(sync_app):
+    app, _ = sync_app
+    app.handle_sync()
+    assert app._purged["confirm_any"] is False
+
+
+def test_sync_once_passes_ask_on_any_delete_through(sync_app):
+    app, _ = sync_app
+    app.handle_sync(confirm_any_delete=True)
+    assert app._purged["confirm_any"] is True

@@ -31,7 +31,9 @@ To sync press S. This will download, update and delete files to match exclusivel
 "%~dp0synchotic-launcher.exe" --sync
 ```
 
-It still asks anything a sync would ask (signing in again, a large delete), so run it with a console window. A clean run closes by itself; anything else waits for a key so you can read why. Exit code: 0 synced, 1 could not start, 2 failed, 3 cancelled.
+It uses the same drives, setlists, library and settings as the app, so change those in the app. It asks before deleting anything, however little (the app only asks about large deletes), and asks anything else a sync would (signing in again), so run it with a console window. A clean run closes by itself; anything else waits for a key so you can read why. Exit code: 0 synced, 1 could not start, 2 failed, 3 cancelled.
+
+Add `--no-purge` to never delete anything on that run, whatever **Purge on sync** is set to. Unfinished downloads are still cleaned up, and the setting itself is left alone.
 
 ## Library
 

@@ -198,11 +198,11 @@ def dialog(monkeypatch):
     return Dialog
 
 
-def _purge(library, settings):
+def _purge(library, settings, **kwargs):
     from src.sync.purge_flow import purge_all_folders
     from src.ui.widgets.progress import FolderProgress
     progress = FolderProgress(0, 0)
-    purge_all_folders(FOLDERS, library, settings, progress=progress)
+    purge_all_folders(FOLDERS, library, settings, progress=progress, **kwargs)
     return progress
 
 
@@ -281,4 +281,68 @@ class TestPurgeOff:
 
     def test_still_sweeps_partial_downloads(self, library, dialog):
         _purge(library, Settings(purge=False, enabled=("d1",)))
+        assert not (library / "One" / "_download_x.7z").exists()
+
+
+class TestSyncOnceAsksAboutAnyDelete:
+    """--sync asks before deleting anything, below the thresholds too."""
+
+    def test_a_small_delete_is_asked_about(self, library, dialog):
+        _purge(library, Settings(enabled=("d1",)), confirm_any=True)
+        assert dialog.asked == [copy.PURGE_CONFIRM.format(
+            files="2 files", size=format_size(16))]
+        assert not (library / "Two" / "stray.txt").exists()
+
+    def test_declining_keeps_everything_but_partials(self, library, dialog):
+        dialog.answer = False
+        _purge(library, Settings(enabled=("d1",)), confirm_any=True)
+        assert (library / "One" / "stray.txt").exists()
+        assert (library / "Two" / "stray.txt").exists()
+        assert not (library / "One" / "_download_x.7z").exists()
+
+    def test_partials_alone_still_ask_nothing(self, library, dialog):
+        """Unfinished downloads are our own debris, never part of the question."""
+        (library / "One" / "stray.txt").unlink()
+        (library / "Two" / "stray.txt").unlink()
+        _purge(library, Settings(enabled=("d1", "d2")), confirm_any=True)
+        assert dialog.asked == []
+        assert not (library / "One" / "_download_x.7z").exists()
+
+
+class TestNoPurge:
+    """--no-purge: purge off for one run, the saved setting untouched."""
+
+    def test_it_reads_as_off(self, tmp_path):
+        settings = UserSettings(tmp_path / "settings.json")
+        settings.purge_paused = True
+        assert settings.purge_on_sync is True
+        assert purges(settings) is False
+
+    def test_it_is_never_saved(self, tmp_path):
+        path = tmp_path / "settings.json"
+        settings = UserSettings.load(path)
+        settings.purge_paused = True
+        settings.save()
+        fresh = UserSettings.load(path)
+        assert fresh.purge_on_sync is True
+        assert purges(fresh) is True
+        assert "purge_paused" not in path.read_text()
+
+    def test_a_reload_mid_run_keeps_it_paused(self, tmp_path):
+        """reload() copies a fresh instance over this one. A pause set up in
+        __init__ would be reset by that, and deleting would come back on."""
+        path = tmp_path / "settings.json"
+        settings = UserSettings.load(path)
+        settings.save()
+        settings.purge_paused = True
+        settings.reload()
+        assert purges(settings) is False
+
+    def test_it_deletes_nothing_but_partials(self, library, dialog, tmp_path):
+        settings = Settings(enabled=("d1",))
+        settings.purge_paused = True
+        _purge(library, settings, confirm_any=True)
+        assert dialog.asked == []
+        assert (library / "One" / "stray.txt").exists()
+        assert (library / "Two" / "stray.txt").exists()
         assert not (library / "One" / "_download_x.7z").exists()

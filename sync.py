@@ -149,8 +149,9 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
         """--sync: start up as run() does, sync once, and exit.
 
         Everything interactive stays interactive (the sign-in offer, the
-        preflight question, the large-purge question) because this is meant
-        for a double-clicked .bat or shortcut, which has a console. Returns the
+        preflight question, the purge question) because this is meant for a
+        double-clicked .bat or shortcut, which has a console. The purge
+        question comes before any deletion here, not only a large one. Returns the
         exit code: 0 synced, 1 could not start, 2 failed, 3 cancelled.
         """
         from src.app.sync_flow import (SYNC_BLOCKED, SYNC_CANCELLED,
@@ -162,7 +163,8 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
         self._start_session(check_signin=True)
 
         if self.folders:
-            self.handle_sync(pause_after=False)
+            # Asks before deleting anything: nobody just looked at the toggles.
+            self.handle_sync(pause_after=False, confirm_any_delete=True)
             outcome = self.last_sync_outcome
         else:
             # The menu would show the empty list; here there is only this.
@@ -457,15 +459,25 @@ def main():
     parser.add_argument(
         "--sync", action="store_true",
         help="sync the drives and setlists already turned on, then exit, "
-             "without opening the menu. For a .bat or shortcut. Still asks "
-             "whatever a sync would ask (sign-in, a large delete), so run it "
-             "with a console. Exit code: 0 synced, 1 could not start, "
-             "2 failed, 3 cancelled.",
+             "without opening the menu. For a .bat or shortcut. Asks before "
+             "deleting anything and whatever else a sync would ask (sign-in), "
+             "so run it with a console. Exit code: 0 synced, 1 could not "
+             "start, 2 failed, 3 cancelled.",
+    )
+    parser.add_argument(
+        "--no-purge", action="store_true", dest="no_purge",
+        help="with --sync: delete nothing this run, whatever Purge on sync "
+             "is set to. Unfinished downloads are still cleaned up. The "
+             "setting itself is left alone.",
     )
     # Parsed before the alternate screen opens. --help and a bad argument both
     # print and exit, and anything printed into that buffer is discarded when
     # the exit handler closes it, so --help showed the user nothing at all.
     cli_args = parser.parse_args()
+    if cli_args.no_purge and not cli_args.sync:
+        # In the menu it would make the Purge row read Off while the setting
+        # is On, and toggling that row would then flip the saved value.
+        parser.error("--no-purge only works with --sync")
 
     # Started now so the request overlaps the rest of startup; read just
     # before the first screen.
@@ -638,6 +650,9 @@ def main():
         app.upstream_notice = copy.UPSTREAM_NEWER.format(latest=newer,
                                                          current=__version__)
     if cli_args.sync:
+        if cli_args.no_purge:
+            app.user_settings.purge_paused = True
+            debug_log("PURGE | paused for this run (--no-purge)")
         sys.exit(app.run_once())
     if app.upstream_notice:
         # Kept by notices and drawn under the banner of the first screen.
