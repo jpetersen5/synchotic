@@ -129,6 +129,9 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
         self._background_scanner: BackgroundScanner | None = None
         self._library_found: dict = {}
 
+    # Set by main() when a newer release is out than this build is based on.
+    upstream_notice = ""
+
     def _should_offer_signin(self) -> bool:
         """Offered on every start while the chosen mode is missing a sign-in
         and nothing else. Asked of the mode, not of the disk: a credentials.json
@@ -169,6 +172,11 @@ class SyncApp(OnboardingMixin, DriveManagementMixin, AuthMixin, ScanMixin, SyncF
 
         if self.auth and self.auth.session_expired:
             display.session_expired_notice()
+
+        # Here, not at startup: the sync screen paints over anything before it.
+        if self.upstream_notice:
+            print()
+            display.say(self.upstream_notice)
 
         # A clean run closes by itself. Anything else waits, or the window
         # takes the reason with it when it closes.
@@ -459,6 +467,12 @@ def main():
     # the exit handler closes it, so --help showed the user nothing at all.
     cli_args = parser.parse_args()
 
+    # Started now so the request overlaps the rest of startup; read just
+    # before the first screen.
+    from src import __version__
+    from src.core.upstream import UpstreamCheck
+    upstream = UpstreamCheck(__version__).start()
+
     if cli_args.first_run:
         sandbox = use_first_run_sandbox(keep_creds=not cli_args.no_creds)
         # Before the alternate screen opens, so it is still there after quitting.
@@ -619,8 +633,15 @@ def main():
         sys.exit(0)
     debug_log(f"[timing] SyncApp init: {(_time.time() - _t1)*1000:.0f}ms")
 
+    newer = upstream.newer(wait=1.0)
+    if newer:
+        app.upstream_notice = copy.UPSTREAM_NEWER.format(latest=newer,
+                                                         current=__version__)
     if cli_args.sync:
         sys.exit(app.run_once())
+    if app.upstream_notice:
+        # Kept by notices and drawn under the banner of the first screen.
+        display.say(app.upstream_notice)
     app.run()
 
 

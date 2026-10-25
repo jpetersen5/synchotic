@@ -119,6 +119,18 @@ def test_no_drives_is_a_run_that_could_not_start(once, capsys):
     assert copy.NO_DRIVES in capsys.readouterr().out
 
 
+def test_a_newer_release_is_shown_before_the_window_closes(once, capsys):
+    """The sync screen paints over anything printed at startup, so --sync
+    shows it at the end, where the closing pause gives time to read it."""
+    app, seen = once
+    seen["outcome"] = SYNC_DONE
+    app.upstream_notice = "Synchotic v9.9.9 is out."
+
+    app.run_once()
+
+    assert "Synchotic v9.9.9 is out." in capsys.readouterr().out
+
+
 def test_a_sign_in_that_died_mid_run_is_explained(once):
     app, seen = once
     seen["outcome"] = SYNC_BLOCKED

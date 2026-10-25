@@ -457,6 +457,10 @@ CONTINUING_IN = "Continuing in 5s (press any key to skip)"
 # --sync: one sync from the command line, then exit
 CLOSING_IN = "Closing in 5s (press any key to close now)"
 PRESS_TO_CLOSE = "Press any key to close"
+# A build the launcher does not update (a fork's, a source checkout) that is
+# behind the latest release. Only a warning: nothing updates or stops.
+UPSTREAM_NEWER = ("Synchotic {latest} is out. This build is v{current} and does "
+                  "not update itself: merge upstream and rebuild.")
 SYNC_EXIT = {
     "done": "Sync finished",
     "blocked": "Sync could not start",
